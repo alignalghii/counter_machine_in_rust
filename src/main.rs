@@ -4,7 +4,34 @@ use std::io::Write; // brings `flush` into scope. (Credit to https://stackoverfl
 
 type Label = Option<String>;
 type Words = Vec<String>;
-type Program = HashMap<Label, Words>;
+type Program = HashMap<Label, Operation>;
+
+#[derive(Debug)]
+enum Operation {
+    Inc(Label),
+    Dec(Label, Label)
+}
+
+impl Operation {
+    fn parse(words: Vec<String>) -> Option<Self> {
+        if words[0] == "inc" && words.len() == 2 {
+            Some(
+                Operation::Inc(
+                    labelize("STOP".to_string(), words[1].clone()) // @TODO: inefficient, complete redesign needed
+                )
+            )
+        } else if words[0] == "dec" && words.len() == 3 {
+            Some(
+                Operation::Dec(
+                    labelize("STOP".to_string(), words[1].clone()), // @TODO: inefficient, complete redesign needed
+                    labelize("STOP".to_string(), words[2].clone())
+                )
+            )
+        } else {
+            None
+        }
+    }
+}
 
 fn main() {
     let mut program: Program = HashMap::new();
@@ -25,11 +52,10 @@ fn main() {
             let operation_words: Words = words.collect();
             if let Some(trailer_symbol) = label_or_direct.pop() {
                 if trailer_symbol == ':' {
-                    if label_or_direct == "START" {
-                        program.insert(None, operation_words);
-                    } else {
-                        program.insert(Some(label_or_direct), operation_words);
-                    }
+                    program.insert(
+                        labelize("START".to_string(), label_or_direct),
+                        Operation::parse(operation_words).expect("Syntax error in operation arguments")
+                    );
                 } else {
                     label_or_direct.push(trailer_symbol);
                     println!("Direct command: `{label_or_direct}`");
@@ -57,4 +83,12 @@ fn trim_newline(line: &mut String) {
 
 fn listing(program: &Program) {
     println!("{program:?}");
+}
+
+fn labelize(special: String, word: String) -> Label {
+    if word == special {
+        None
+    } else {
+        Some(word)
+    }
 }
