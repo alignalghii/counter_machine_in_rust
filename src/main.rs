@@ -38,7 +38,7 @@ fn main() {
     let input_stream_channel = io::stdin();
     let mut output_stream_channel = io::stdout();
     loop {
-        println!("Type labeled program line to be stored in listing, or a direct command!");
+        println!("Type labeled program line to be stored in listing, or a direct command:");
         print!("> ");
         output_stream_channel.flush().unwrap(); // Credit to https://stackoverflow.com/a/41387232
         let mut line = String::new();
@@ -48,28 +48,44 @@ fn main() {
         }
         trim_newline(&mut line);
         let mut words = line.split_whitespace().map(|word| word.to_string());
-        if let Some(mut label_or_direct) = words.next() {
+        if let Some(label_or_direct) = words.next() {
             let operation_words: Words = words.collect();
-            if let Some(trailer_symbol) = label_or_direct.pop() {
-                if trailer_symbol == ':' {
-                    program.insert(
-                        labelize("START".to_string(), label_or_direct),
-                        Operation::parse(operation_words).expect("Syntax error in operation arguments")
-                    );
-                } else {
-                    label_or_direct.push(trailer_symbol);
-                    println!("Direct command: `{label_or_direct}`");
-                    match label_or_direct.as_str() { // Credit to https://stackoverflow.com/a/29268076
+            match interpret_by_trailer(':', label_or_direct) { // `label_or_direct` has just been moved
+                Ok(label_word) => {
+                    if let Some(operation) = Operation::parse(operation_words) {
+                        program.insert(
+                            labelize("START".to_string(), label_word),
+                            operation
+                      );
+                    } else {
+                        println!("Syntax error in labelled program line, either in label or in operation arguments!")
+                    }
+                },
+                Err(direct_command) => {
+                    println!("Direct command: `{direct_command}`");
+                    match direct_command.as_str() { // Credit to https://stackoverflow.com/a/29268076
                         "quit" => break,
                         "list" => listing(&program),
                         other  => println!("The `{other}` direct command  has no implementation yet!")
-
                     }
                 }
             }
         } else {
             println!("Empty line skipped");
         }
+    }
+}
+
+fn interpret_by_trailer(expected_trailer: char, mut word: String) -> Result<String, String> {
+    if let Some(trailer_symbol) = word.pop() {
+        if trailer_symbol == expected_trailer {
+            Ok(word)
+        } else {
+            word.push(trailer_symbol);
+            Err(word)
+        }
+    } else {
+        panic!("Empty labels or direct commands are not allowed!");
     }
 }
 
