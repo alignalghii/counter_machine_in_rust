@@ -17,14 +17,14 @@ impl Operation {
         if words[0] == "inc" && words.len() == 2 {
             Some(
                 Operation::Inc(
-                    labelize("STOP".to_string(), words[1].clone()) // @TODO: inefficient, complete redesign needed
+                    labelize("STOP", words[1].clone()) // @TODO: inefficient, complete redesign needed
                 )
             )
         } else if words[0] == "dec" && words.len() == 3 {
             Some(
                 Operation::Dec(
-                    labelize("STOP".to_string(), words[1].clone()), // @TODO: inefficient, complete redesign needed
-                    labelize("STOP".to_string(), words[2].clone())
+                    labelize("STOP", words[1].clone()), // @TODO: inefficient, complete redesign needed
+                    labelize("STOP", words[2].clone())
                 )
             )
         } else {
@@ -54,7 +54,7 @@ fn main() {
                 Ok(label_word) => {
                     if let Some(operation) = Operation::parse(operation_words) {
                         program.insert(
-                            labelize("START".to_string(), label_word),
+                            labelize("START", label_word),
                             operation
                       );
                     } else {
@@ -101,7 +101,7 @@ fn listing(program: &Program) {
     println!("{program:?}");
 }
 
-fn labelize(special: String, word: String) -> Label {
+fn labelize(special: &'static str, word: String) -> Label {
     if word == special {
         None
     } else {
