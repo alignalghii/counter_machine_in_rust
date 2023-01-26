@@ -2,9 +2,13 @@ use std::io;
 use std::collections::HashMap;
 use std::io::Write; // brings `flush` into scope. (Credit to https://stackoverflow.com/a/41387232)
 
-type Label = Option<String>;
-type Words = Vec<String>;
+// Intermediate, temporary or auxiliary concepts, mostly borrowed values:
+type ProgramLine<'a> = (&'a Label, &'a Operation);
+type WordSlices<'a> = Vec<&'a str>; // to avoid the "cannot move out of index of `Vec<String>`" bug! @credit to https://stackoverflow.com/q/27904864
+
+// Main concepts, mostly owened vales
 type Program = HashMap<Label, Operation>;
+type Label = Option<String>;
 
 #[derive(Debug)]
 enum Operation {
@@ -13,18 +17,18 @@ enum Operation {
 }
 
 impl Operation {
-    fn parse(words: Vec<String>) -> Option<Self> {
-        if words[0] == "inc" && words.len() == 2 {
+    fn parse(word_slices: WordSlices) -> Option<Self> {
+        if word_slices.len() == 2 && word_slices[0] == "inc"  {
             Some(
                 Operation::Inc(
-                    labelize("STOP", words[1].clone()) // @TODO: inefficient, complete redesign needed
+                    labelize("STOP", word_slices[1].to_string()) // @TODO: consider efficiency (but seems to be correct and unavoidable)
                 )
             )
-        } else if words[0] == "dec" && words.len() == 3 {
+        } else if word_slices.len() == 3 && word_slices[0] == "dec" {
             Some(
                 Operation::Dec(
-                    labelize("STOP", words[1].clone()), // @TODO: inefficient, complete redesign needed
-                    labelize("STOP", words[2].clone())
+                    labelize("STOP", word_slices[1].to_string()), // @TODO: consider efficiency (but seems to be correct and unavoidable)
+                    labelize("STOP", word_slices[2].to_string())
                 )
             )
         } else {
@@ -40,17 +44,17 @@ fn main() {
     loop {
         println!("Type labeled program line to be stored in listing, or a direct command:");
         print!("> ");
-        output_stream_channel.flush().unwrap(); // Credit to https://stackoverflow.com/a/41387232
+        output_stream_channel.flush().unwrap(); // @credit to https://stackoverflow.com/a/41387232
         let mut line = String::new();
         input_stream_channel.read_line(&mut line).expect("Read error");
         if line.is_empty() {
             break;
         }
         trim_newline(&mut line);
-        let mut words = line.split_whitespace().map(|word| word.to_string());
+        let mut words = line.split_whitespace();
         if let Some(label_or_direct) = words.next() {
-            let operation_words: Words = words.collect();
-            match interpret_by_trailer(':', label_or_direct) { // `label_or_direct` has just been moved
+            let operation_words: WordSlices = words.collect();
+            match interpret_by_trailer(':', label_or_direct.to_string()) { // `label_or_direct` has just been moved
                 Ok(label_word) => {
                     if let Some(operation) = Operation::parse(operation_words) {
                         program.insert(
@@ -63,7 +67,7 @@ fn main() {
                 },
                 Err(direct_command) => {
                     println!("Direct command: `{direct_command}`");
-                    match direct_command.as_str() { // Credit to https://stackoverflow.com/a/29268076
+                    match direct_command.as_str() { // @credit to https://stackoverflow.com/a/29268076
                         "quit" => break,
                         "list" => listing(&program),
                         other  => println!("The `{other}` direct command  has no implementation yet!")
@@ -97,8 +101,36 @@ fn trim_newline(line: &mut String) {
     }
 }
 
-fn listing(program: &Program) {
-    println!("{program:?}");
+fn listing(ref_program: &Program) {
+    print_listing(listing_representation(ref_program));
+}
+
+fn listing_representation<'a>(program: &'a Program) -> Vec<ProgramLine<'a>> {
+    let mut lines = vec![];
+    if let Some(start_label_ref) = program.keys().find(|&label_ref| label_ref.is_none()) {
+        let mut ref_current_label = start_label_ref;
+        loop {
+            if let Some(ref_operation) = program.get(ref_current_label) {
+                lines.push((ref_current_label, ref_operation));
+                ref_current_label = next_ref_label(ref_operation);
+                if ref_current_label.is_none() {
+                    break;
+                }
+            } else {
+                println!("Inconsistency in label linearity");
+                break;
+            }
+        }
+    } else {
+        println!("No `START` label!");
+    }
+    lines
+}
+
+fn print_listing(list: Vec<ProgramLine>) {
+    for (i, o) in list.iter() {
+        println!("{i:?} {o:?}");
+    }
 }
 
 fn labelize(special: &'static str, word: String) -> Label {
@@ -106,5 +138,14 @@ fn labelize(special: &'static str, word: String) -> Label {
         None
     } else {
         Some(word)
+    }
+}
+
+
+// Reference to enum variant: @credit to https://stackoverflow.com/q/36590549
+fn next_ref_label<'a>(ref_operation: &'a Operation) -> &'a Label {
+    match ref_operation {
+        &Operation::Inc(ref next)         => next, // @credit to https://stackoverflow.com/a/36590693
+        &Operation::Dec(ref _loopback_case, ref break_case) => break_case
     }
 }
